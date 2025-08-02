@@ -294,12 +294,19 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
       if (formData.user.photos && formData.user.photos.length > 0) {
         try {
           console.log(`Uploading ${formData.user.photos.length} photos to Firebase Storage...`);
+          
+          // Temporarily skip photo upload to test submission
+          console.log("⚠️ TEMPORARILY SKIPPING PHOTO UPLOAD FOR TESTING");
+          photoUrls = []; // Skip photo upload for now
+          
+          /* 
           photoUrls = await uploadPhotosToStorage(
             formData.user.photos, 
             reportId, 
             formData.isAnonymous
           );
           console.log("Photo upload successful:", photoUrls);
+          */
         } catch (uploadError) {
           console.error("Photo upload failed:", uploadError);
           toast({ 
