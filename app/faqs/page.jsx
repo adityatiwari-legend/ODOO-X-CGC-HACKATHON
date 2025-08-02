@@ -44,7 +44,7 @@ export default function FaqPage() {
             <div className="bg-white rounded-2xl p-6 shadow-sm border">
               <h3 className="text-xl font-bold text-[#1F2937] mb-4">How do I report an outage?</h3>
               <p className="text-gray-600 leading-relaxed">
-                To report an outage, simply click the "Report Outage" button in the navigation menu or on the homepage. You'll need to create an account or log in first. Then fill out the form with details about the outage including the type (electricity or water), location, and description.
+                To report an outage, simply click the "Report Outage" button in the navigation menu or on the homepage. You'll need to create an account or log in first. Then fill out the form with details about the outage including the type (electricity, water, roads, etc.), location, and description.
               </p>
             </div>
             <div className="bg-white rounded-2xl p-6 shadow-sm border">

@@ -144,25 +144,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const resendIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Disposable email domains check
-  const disposableEmailDomains = [
-    "10minutemail.com", "mailinator.com", "guerrillamail.com", "tempmail.org",
-    "throwaway.email", "mailnesia.com", "maildrop.cc", "getairmail.com",
-    "sharklasers.com", "grr.la", "guerrillamailblock.com", "pokemail.net",
-    "spam4.me", "bccto.me", "chacuo.net", "dispostable.com", "mailinator2.com",
-    "mailmetrash.com", "trashmail.net", "mailnull.com", "getnada.com",
-    "yopmail.com", "yopmail.net", "yopmail.org", "cool.fr.nf", "jetable.fr.nf",
-    "nospam.ze.tc", "nomail.xl.cx", "mega.zik.dj", "speed.1s.fr", "courriel.fr.nf",
-    "moncourrier.fr.nf", "monemail.fr.nf", "monmail.fr.nf", "mailo.com",
-    "mailnesia.com", "mailcatch.com", "mailinator.com", "mailinator2.com",
-    "mailinator3.com", "mailinator4.com", "mailinator5.com", "mailinator6.com",
-    "mailinator7.com", "mailinator8.com", "mailinator9.com", "mailinator10.com"
-  ];
-
-  const isDisposableEmail = (email: string) => {
+  // Real-time disposable email check using DeBounce API
+  const isDisposableEmail = async (email: string) => {
     if (!email || !email.includes('@')) return false;
-    const domain = email.split('@')[1]?.toLowerCase();
-    return disposableEmailDomains.includes(domain);
+    try {
+      const res = await fetch(`https://disposable.debounce.io/?email=${encodeURIComponent(email)}`);
+      if (!res.ok) return false; // fallback: allow if API fails
+      const data = await res.json();
+      return data.disposable === "true";
+    } catch (e) {
+      return false; // fallback: allow if API fails
+    }
   };
+
+  // replaced by async version above
 
   // Timer for resend verification email
   const startResendTimer = () => {
@@ -230,7 +225,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!data.name.trim()) newErrors.name = 'Name is required';
       if (!data.email.trim()) newErrors.email = 'Email is required';
       else if (!/\S+@\S+\.\S+/.test(data.email)) newErrors.email = 'Email is invalid';
-      else if (isDisposableEmail(data.email)) newErrors.email = 'Disposable emails are not allowed. Please use a permanent email address.';
+      else if (await isDisposableEmail(data.email)) newErrors.email = 'Disposable emails are not allowed. Please use a permanent email address.';
       if (!data.password) newErrors.password = 'Password is required';
       else if (data.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
       if (data.password !== data.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';

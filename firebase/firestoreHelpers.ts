@@ -1,3 +1,10 @@
+import { orderBy, limit } from "firebase/firestore"
+export const fetchLatestOutageReports = async (count = 4) => {
+  const outagesRef = collection(db, "outageReports");
+  const q = query(outagesRef, orderBy("timestamp", "desc"), limit(count));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+};
 // firebase/firestoreHelpers.ts
 import { db } from "@/firebase/firebase"
 import {
