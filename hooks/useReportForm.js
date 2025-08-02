@@ -2,14 +2,16 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { getAuth } from "firebase/auth";
 import useFormValidation from "@/hooks/useFormValidation";
 import { useGooglePlaces } from "@/hooks/useGooglePlaces";
+import { uploadPhotosToStorage, generateReportId } from '../lib/photoUpload';
 
 export function useReportForm({ user, toast, router, isLoaded, descriptionValueRef }) {
   const [formData, setFormData] = useState({
-    issue: { type: "electricity", description: "" },
+    issue: { type: "electricity", title: "", description: "" },
     location: { locality: "", city: "", state: "", pinCode: "" },
     lat: null,
     lng: null,
-    user: { photo: null },
+    user: { photos: [] },
+    isAnonymous: false,
     locationSource: null, // 'browser' or 'search'
     browserLat: null, // preserve browser lat/lng if set
     browserLng: null,
@@ -184,15 +186,23 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
     });
   }, [googlePlaces, descriptionValueRef]);
 
-  // Remove photo
-  const handleRemovePhoto = useCallback(() => {
-    setFormData((prev) => ({ ...prev, user: { ...prev.user, photo: null } }));
-  }, []);
-
   // Handlers
   const handleTypeChange = useCallback((type) => {
     setFormData((prev) => ({ ...prev, issue: { ...prev.issue, type } }));
-  }, []);
+    if (formErrors.type) {
+      setFormErrors((prev) => ({ ...prev, type: null }));
+    }
+  }, [formErrors, setFormErrors]);
+
+  const handleTitleChange = useCallback((e) => {
+    setFormData((prev) => ({
+      ...prev,
+      issue: { ...prev.issue, title: e.target.value },
+    }));
+    if (formErrors.title) {
+      setFormErrors((prev) => ({ ...prev, title: null }));
+    }
+  }, [formErrors, setFormErrors]);
 
   const handleLocationChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -215,19 +225,91 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
     }
   }, [formErrors, setFormErrors]);
 
+  const handleAddPhoto = useCallback((file) => {
+    setFormData((prev) => ({
+      ...prev,
+      user: { 
+        ...prev.user, 
+        photos: [...prev.user.photos, file] 
+      },
+    }));
+  }, []);
+
+  const handleRemovePhoto = useCallback((index) => {
+    setFormData((prev) => ({
+      ...prev,
+      user: { 
+        ...prev.user, 
+        photos: prev.user.photos.filter((_, i) => i !== index) 
+      },
+    }));
+  }, []);
+
+  const handleAnonymousModeChange = useCallback((isAnonymous) => {
+    setFormData((prev) => ({
+      ...prev,
+      isAnonymous,
+    }));
+  }, []);
+
   // Submit handler with AbortController
   const handleSubmitReport = useCallback(async (e) => {
+    console.log("=== SUBMIT HANDLER START ===");
+    console.log("Event:", e);
+    console.log("Event type:", e?.type);
+    
     e.preventDefault();
-    if (!validate()) return;
+    console.log("preventDefault called");
+    console.log("Form submitted!");
+    console.log("Form data:", formData);
+    
+    if (!validate()) {
+      console.log("Validation failed, form errors:", formErrors);
+      return;
+    }
+    
+    console.log("Validation passed");
     setIsSubmitting(true);
     abortControllerRef.current = new AbortController();
+    
     try {
+      // Generate a unique report ID for photo uploads
+      const reportId = generateReportId();
+      
+      // Upload photos to Firebase Storage first (if any)
+      let photoUrls = [];
+      if (formData.user.photos && formData.user.photos.length > 0) {
+        try {
+          console.log(`Uploading ${formData.user.photos.length} photos to Firebase Storage...`);
+          photoUrls = await uploadPhotosToStorage(
+            formData.user.photos, 
+            reportId, 
+            formData.isAnonymous
+          );
+          console.log("Photo upload successful:", photoUrls);
+        } catch (uploadError) {
+          console.error("Photo upload failed:", uploadError);
+          toast({ 
+            title: "Photo upload failed", 
+            description: "Failed to upload photos. Please try again.", 
+            variant: "destructive" 
+          });
+          return;
+        }
+      }
+
+      console.log("Creating payload...");
       const payload = {
         ...formData.issue,
         ...formData.location,
-        uid: user?.uid,
-        email: user?.email,
+        uid: formData.isAnonymous ? null : user?.uid,
+        email: formData.isAnonymous ? null : user?.email,
+        isAnonymous: formData.isAnonymous,
+        reportId: reportId,
+        photos: photoUrls, // Send photo URLs instead of files
       };
+      
+      console.log("Payload created:", payload);
 
       // Always use browser coordinates if locationSource is 'browser'
       if (formData.locationSource === 'browser' && formData.browserLat && formData.browserLng) {
@@ -240,66 +322,81 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
         payload.lng = formData.lng;
       }
 
-
-      // Always get the current user from Firebase Auth instance
+      // Always get the current user from Firebase Auth instance (only for verified reports)
       let idToken = null;
-      try {
-        const currentUser = getAuth().currentUser;
-        if (currentUser) {
-          idToken = await currentUser.getIdToken();
-          console.log("[Report Submit] Got ID token:", idToken);
-        } else {
-          console.warn("[Report Submit] No currentUser found in Firebase Auth");
+      if (!formData.isAnonymous) {
+        try {
+          const currentUser = getAuth().currentUser;
+          if (currentUser) {
+            idToken = await currentUser.getIdToken();
+            console.log("[Report Submit] Got ID token:", idToken);
+          } else {
+            console.warn("[Report Submit] No currentUser found in Firebase Auth");
+          }
+        } catch (err) {
+          console.error("[Report Submit] Error getting ID token:", err);
         }
-      } catch (err) {
-        console.error("[Report Submit] Error getting ID token:", err);
       }
 
       console.log("Final payload coordinates:", payload.lat, payload.lng);
       console.log("Location source:", formData.locationSource);
-      let res, result;
-      const headers = idToken ? { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` } : { "Content-Type": "application/json" };
-      if (formData.user.photo) {
-        const fd = new FormData();
-        Object.entries(payload).forEach(([k, v]) => fd.append(k, v));
-        fd.append("photo", formData.user.photo);
-        if (idToken) fd.append("idToken", idToken); // fallback for FormData
-        res = await fetch("/api/outageReports", {
-          method: "POST",
-          body: fd,
-          signal: abortControllerRef.current.signal,
-          headers: idToken ? { "Authorization": `Bearer ${idToken}` } : undefined,
-        });
-      } else {
-        res = await fetch("/api/outageReports", {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-          signal: abortControllerRef.current.signal,
-        });
-      }
-      result = await res.json();
+      
+      const headers = idToken ? { 
+        "Content-Type": "application/json", 
+        "Authorization": `Bearer ${idToken}` 
+      } : { 
+        "Content-Type": "application/json" 
+      };
+      
+      console.log("Headers:", headers);
+      console.log("About to send request...");
+      
+      // Always send as JSON now since photos are uploaded separately
+      const res = await fetch("/api/outageReports", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal: abortControllerRef.current.signal,
+      });
+      
+      console.log("Request sent, response status:", res.status);
+      const result = await res.json();
+      console.log("Response result:", result);
       if (result.success) {
         setSubmitSuccess(true);
         setFormData({
-          issue: { type: "electricity", description: "" },
+          issue: { type: "electricity", title: "", description: "" },
           location: { locality: "", city: "", state: "", pinCode: "" },
           lat: null,
           lng: null,
-          user: { photo: null },
+          user: { photos: [] },
+          isAnonymous: false,
           locationSource: null,
           browserLat: null,
           browserLng: null,
         });
         setFormErrors({});
         setLocalityInputKey(Date.now());
-        toast({ title: "Report submitted!", description: "Thank you for reporting the issue.", variant: "success" });
+        toast({ 
+          title: "Report submitted!", 
+          description: "Thank you for reporting the issue.", 
+          variant: "success" 
+        });
       } else {
-        toast({ title: "Submission failed", description: result.error || "Failed to submit report.", variant: "destructive" });
+        toast({ 
+          title: "Submission failed", 
+          description: result.error || "Failed to submit report.", 
+          variant: "destructive" 
+        });
       }
     } catch (error) {
       if (error.name !== "AbortError") {
-        toast({ title: "Submission failed", description: "Failed to submit report. Please try again.", variant: "destructive" });
+        console.error("Submit error:", error);
+        toast({ 
+          title: "Submission failed", 
+          description: "Failed to submit report. Please try again.", 
+          variant: "destructive" 
+        });
       }
     } finally {
       setIsSubmitting(false);
@@ -346,9 +443,12 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
     searchError: googlePlaces.searchError,
     isGettingLocation: googlePlaces.isGettingLocation,
     handleTypeChange,
+    handleTitleChange,
     handleLocationChange,
     handleDescriptionChange,
+    handleAddPhoto,
     handleRemovePhoto,
+    handleAnonymousModeChange,
     handleSubmitReport,
     handleSearch,
     handleClearSearch,

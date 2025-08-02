@@ -7,24 +7,6 @@ const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_GEOCODING_API_KEY || process
 // POST: Add outage report to the database
 export async function POST(request: NextRequest) {
   try {
-    // Get ID token from Authorization header
-    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-    let decodedToken = null;
-    console.log('[API] Received POST /api/outageReports');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const idToken = authHeader.split('Bearer ')[1];
-      try {
-        decodedToken = await getAuth().verifyIdToken(idToken);
-        console.log('[API] Decoded Firebase ID token:', decodedToken);
-      } catch (err) {
-        console.error('[API] Invalid or expired Firebase ID token', err);
-        return NextResponse.json({ success: false, error: 'Unauthorized: Invalid or expired token' }, { status: 401 });
-      }
-    } else {
-      console.error('[API] No Authorization header provided');
-      return NextResponse.json({ success: false, error: 'Unauthorized: No token provided' }, { status: 401 });
-    }
-
     let body = null;
     try {
       body = await request.json();
@@ -34,10 +16,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
     }
 
-    // Use user info from decoded token
-    const userEmail = decodedToken.email;
-    const userUid = decodedToken.uid;
-    const source = userEmail === 'alertshipdotco@gmail.com' ? 'official' : 'crowdsourced';
+    // Check if it's an anonymous report
+    const isAnonymous = body.isAnonymous || false;
+    let decodedToken = null;
+    let reporterUid = null;
+    let reporterEmail = null;
+    let source = 'crowdsourced';
+
+    if (!isAnonymous) {
+      // For verified reports, require authentication
+      const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+      console.log('[API] Received POST /api/outageReports - Verified Report');
+      
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const idToken = authHeader.split('Bearer ')[1];
+        try {
+          decodedToken = await getAuth().verifyIdToken(idToken);
+          console.log('[API] Decoded Firebase ID token:', decodedToken);
+          reporterUid = decodedToken.uid;
+          reporterEmail = decodedToken.email;
+          source = reporterEmail === 'alertshipdotco@gmail.com' ? 'official' : 'crowdsourced';
+        } catch (err) {
+          console.error('[API] Invalid or expired Firebase ID token', err);
+          return NextResponse.json({ success: false, error: 'Unauthorized: Invalid or expired token' }, { status: 401 });
+        }
+      } else {
+        console.error('[API] No Authorization header provided for verified report');
+        return NextResponse.json({ success: false, error: 'Unauthorized: No token provided for verified report' }, { status: 401 });
+      }
+    } else {
+      console.log('[API] Received POST /api/outageReports - Anonymous Report');
+    }
 
     // Geocode address on the server with detailed logging
     let lat = null, lng = null, geocodeStatus = null, geocodeError = null, geocodeApiResponse = null;
@@ -79,8 +88,9 @@ export async function POST(request: NextRequest) {
     try {
       docRef = await db.collection('outageReports').add({
         ...body,
-        uid: userUid,
-        email: userEmail,
+        uid: reporterUid,
+        email: reporterEmail,
+        isAnonymous,
         source,
         lat,
         lng,

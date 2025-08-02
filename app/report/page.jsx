@@ -10,9 +10,13 @@ import { AuthModals } from "@/components/auth-modals";
 import { useAuth } from "@/contexts/AuthContext";
 import { Nunito } from "next/font/google";
 import OutageTypeSelector from "@/components/report/OutageTypeSelector";
+import EnhancedOutageTypeSelector from "@/components/report/EnhancedOutageTypeSelector";
+import TitleInput from "@/components/report/TitleInput";
 import LocationDetails from "@/components/report/LocationDetails";
 import DescriptionInput from "@/components/report/DescriptionInput";
 import PhotoUpload from "@/components/report/PhotoUpload";
+import MultiPhotoUpload from "@/components/report/MultiPhotoUpload";
+import ReportingModeSelector from "@/components/report/ReportingModeSelector";
 import SuccessMessage from "@/components/report/SuccessMessage";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -61,9 +65,12 @@ export default function ReportPage() {
     searchError,
     isGettingLocation,
     handleTypeChange,
+    handleTitleChange,
     handleLocationChange,
     handleDescriptionChange,
+    handleAddPhoto,
     handleRemovePhoto,
+    handleAnonymousModeChange,
     handleSubmitReport,
     handleSearch,
     handleClearSearch,
@@ -93,17 +100,18 @@ export default function ReportPage() {
     }
   }, [submitSuccess]);
 
-  // Route protection with proper loading state check
+  // Route protection with proper loading state check - allow access for anonymous reporting
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      router.push("/");
+      // Still allow access to the page for anonymous reporting
+      // router.push("/");
     }
   }, [loading, isAuthenticated, router]);
 
-
   // Only render after auth state is loaded
   if (loading) return null;
-  if (!isAuthenticated) return null;
+  // Allow rendering even if not authenticated for anonymous reporting
+  // if (!isAuthenticated) return null;
 
 
 
@@ -130,6 +138,7 @@ export default function ReportPage() {
               </div>
               <form
                 onSubmit={e => {
+                  console.log("Form onSubmit triggered");
                   setHasSubmitted(true);
                   handleSubmitReport(e);
                 }}
@@ -137,7 +146,17 @@ export default function ReportPage() {
                 noValidate
                 aria-live="polite"
               >
-                <OutageTypeSelector value={formData.issue.type} onChange={handleTypeChange} />
+                <ReportingModeSelector 
+                  isAnonymous={formData.isAnonymous}
+                  onChange={handleAnonymousModeChange}
+                  isAuthenticated={isAuthenticated}
+                />
+                <EnhancedOutageTypeSelector value={formData.issue.type} onChange={handleTypeChange} />
+                <TitleInput
+                  value={formData.issue.title}
+                  onChange={handleTitleChange}
+                  error={formErrors.title}
+                />
                 <LocationDetails
                   location={formData.location}
                   onChange={handleLocationChange}
@@ -166,19 +185,13 @@ export default function ReportPage() {
                   error={formErrors.description}
                   inputRef={descriptionInputRef}
                 />
-                <PhotoUpload
-                  photo={formData.user.photo}
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setFormData((prev) => ({
-                        ...prev,
-                        user: { ...prev.user, photo: e.target.files[0] },
-                      }));
-                    }
-                  }}
+                <MultiPhotoUpload
+                  photos={formData.user.photos}
+                  onChange={handleAddPhoto}
                   onRemove={handleRemovePhoto}
+                  maxPhotos={5}
                 />
-                <div className="flex justify-end pt-4">
+                <div className="flex justify-end pt-4 space-x-4">
                   <Button
                     type="submit"
                     disabled={isSubmitting}
