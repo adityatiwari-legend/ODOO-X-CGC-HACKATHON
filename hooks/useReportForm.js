@@ -266,6 +266,7 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
 
   // Submit handler with AbortController
   const handleSubmitReport = useCallback(async (e) => {
+    console.log("🚀 SUBMIT BUTTON CLICKED!");
     console.log("=== SUBMIT HANDLER START ===");
     console.log("Event:", e);
     console.log("Event type:", e?.type);
@@ -413,7 +414,7 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, user, validate, toast, setFormErrors]);
+  }, [formData, formErrors, user, validate, toast, setFormErrors]);
 
   // Abort API requests on unmount
   useEffect(() => {

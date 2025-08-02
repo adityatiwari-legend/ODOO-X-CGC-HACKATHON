@@ -193,6 +193,18 @@ export default function ReportPage() {
                 />
                 <div className="flex justify-end pt-4 space-x-4">
                   <Button
+                    type="button"
+                    onClick={() => {
+                      console.log("🔥 TEST BUTTON CLICKED!");
+                      console.log("handleSubmitReport function:", typeof handleSubmitReport);
+                      console.log("Form data:", formData);
+                      handleSubmitReport(new Event('submit'));
+                    }}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2"
+                  >
+                    Test Submit
+                  </Button>
+                  <Button
                     type="submit"
                     disabled={isSubmitting}
                     className="bg-[#F59E0B] hover:bg-[#F59E0B]/90 text-white px-8 py-3 text-lg font-semibold h-auto"
