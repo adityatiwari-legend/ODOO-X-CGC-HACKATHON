@@ -59,7 +59,7 @@ AlertShip is a modern web platform empowering communities to **report**, **view*
    pnpm install
    ```
 3. **Set up environment variables:**
-   - Copy `.env.example` to `.env.local` and fill in your API keys (Google Maps, Firebase, etc).
+   - Make a `.env.local` file in the root directory and fill in your API keys (Google Maps, Firebase, etc).
 4. **Run the development server:**
    ```sh
    pnpm dev
