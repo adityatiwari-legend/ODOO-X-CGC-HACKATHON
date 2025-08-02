@@ -26,8 +26,8 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
   const googlePlaces = useGooglePlaces({
     toast,
     onLocationUpdate: (locationData) => {
-      // Robust fallback for locality
-      const bestLocality =
+      // Robust fallback for locality, always keep it short (first segment if fallback is address/city)
+      let bestLocality =
         locationData.locality ||
         locationData.premise ||
         locationData.neighborhood ||
@@ -36,6 +36,13 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
         locationData.city ||
         locationData.address ||
         "";
+      // If fallback is city or address, extract only the first segment before comma
+      if (bestLocality && (bestLocality === locationData.address || bestLocality === locationData.city)) {
+        bestLocality = bestLocality.split(",")[0].trim();
+      } else if (bestLocality && bestLocality.includes(",")) {
+        // If any fallback returns a comma-separated string, use only the first part
+        bestLocality = bestLocality.split(",")[0].trim();
+      }
       setFormData((prev) => ({
         ...prev,
         location: {
@@ -94,8 +101,8 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
     // Let the hook handle the place selection and location formatting
     await googlePlaces.handlePlaceSelect(prediction, {
       onLocationUpdate: (locationData) => {
-        // Robust fallback for locality
-        const bestLocality =
+        // Robust fallback for locality, always keep it short (first segment if fallback is address/city)
+        let bestLocality =
           locationData.locality ||
           locationData.premise ||
           locationData.neighborhood ||
@@ -104,6 +111,11 @@ export function useReportForm({ user, toast, router, isLoaded, descriptionValueR
           locationData.city ||
           locationData.address ||
           "";
+        if (bestLocality && (bestLocality === locationData.address || bestLocality === locationData.city)) {
+          bestLocality = bestLocality.split(",")[0].trim();
+        } else if (bestLocality && bestLocality.includes(",")) {
+          bestLocality = bestLocality.split(",")[0].trim();
+        }
         setFormData((prev) => {
           if (prev.locationSource === 'browser') {
             // If we already have browser location, preserve lat/lng
